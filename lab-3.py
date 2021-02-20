@@ -1,15 +1,18 @@
 from flask import Flask, request, jsonify
 from flask_pymongo import PyMongo
+from marshmallow import Schema, fields
+from bson.json_util import dumps
+from json import loads
+from keys import keys
 import datetime
 
 app = Flask(__name__)
 
-app.config["MONGO_URI"] = "<YOUR_CONNECTION_STRING>"
+app.config["MONGO_URI"] = "mongodb+srv://admin:"+keys["pw"]+"@cluster0.41j7h.mongodb.net/"+keys["nm"]+"?retryWrites=true&w=majority"
 mongo = PyMongo(app)
 
-dte = datetime.datetime.now()
-
 db_operations = mongo.db.tanks
+dte = datetime.datetime.now()
 
 profileDB = {
     "sucess": True,
@@ -20,6 +23,12 @@ profileDB = {
         "color": "#3478ff"
     }
 }
+
+class TankSchema(Schema):
+  location = fields.String(required=True)
+  lat = fields.Float(required=True)
+  long = fields.Float(required=True)
+  percentage_full = fields.Integer(required=True)
 
 @app.route("/", methods=["GET"])
 def home():
@@ -58,21 +67,17 @@ def profile():
 def data():
     if request.method == "POST":
         # /POST
-        
-        posts = {}
-        posts["location"] = (request.json["location"])
-        posts["lat"] = (request.json["lat"])
-        posts["long"] = (request.json["long"])
-        posts["percentage_full"] = (request.json["percentage_full"])
+        newTank = TankSchema().load(request.json)
 
-        db_operations.insert_one(jsonify(posts))
-        return jsonify(posts)
+        db_operations.insert_one(newTank)
+        return loads(dumps(newTank))
 
     else:
         # /GET
 
         tanks = db_operations.find()
-        return jsonify(tanks)
+        return  jsonify(loads(dumps(tanks)))
+
 
 @app.route("/data/<ObjectId:id>", methods=["PATCH", "DELETE"])
 def update(id):
@@ -82,10 +87,11 @@ def update(id):
     if request.method == "PATCH":
         # /PATCH
        
-        updatedTank = {"$set": request.json}
+        updates = {"$set": request.json}
+        db_operations.update_one(filt, updates)      
         
-        db_operations.update_one(filt, updatedTank)      
-        return jsonify(updatedTank) 
+        updatedTank = db_operations.find_one(filt)
+        return  jsonify(loads(dumps(updatedTank)))
 
     elif request.method == "DELETE":
         # /DELETE
@@ -99,7 +105,7 @@ def update(id):
         # /GET
 
         tanks = db_operations.find()
-        return jsonify(tanks)
+        return  jsonify(loads(dumps(tanks)))
 
 # Main
 if __name__ == '__main__':
